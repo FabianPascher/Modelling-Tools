@@ -1,0 +1,121 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
+		<script>
+		var I_dens_max = 5; // A per cm²
+		//BV function for voltage calculation
+		function BV(I_dens, Temp, alpha, I_0, I_lim) {
+			return (
+				((8.3144621 * Temp) / 
+				(alpha * 96485.33212)) // R = 8.3144621 J/(mol*K) ; F = 96485.33212 C/mol*K
+				* Math.asinh( (1/2) *
+				(
+				(I_dens / I_0) /
+				(1- (I_dens / I_lim))
+				)
+				)
+			);
+		}
+		function getData() {
+			var Temp = parseFloat(document.getElementById("Temp").value);
+			var alpha = parseFloat(document.getElementById("alpha").value);
+			var I_0 = parseFloat(document.getElementById("I_0").value);
+			var I_lim = parseFloat(document.getElementById("I_lim").value);
+			var y = 0;
+			var data = [];
+			var dataSeries = {
+				type: 'line'
+			};
+			var xs = [], ys = [];
+		
+			for (var I_dens = 0; I_dens < I_dens_max; I_dens+=.01) { //step size ++ means integer += allows floats
+				y = BV(I_dens, parseFloat(Temp), parseFloat(alpha), parseFloat(I_0), parseFloat(I_lim))*1000 //times 1000 due to mV
+				xs.push(I_dens);
+				ys.push(y);
+			};
+			dataSeries['x'] = xs;
+			dataSeries['y'] = ys;
+			data.push(dataSeries);
+			return data
+		};
+		// init the chart
+			window.onload = function() {
+				var layout = {
+					title: "Butler Volmer",
+					font: {size: 16},
+					xaxis: {
+						title: "Current Density j [A/cm²]"
+						},
+					yaxis: {
+						title: "Voltage [mV]"
+						},
+				};
+				Plotly.newPlot('chartContainer', getData(), layout);
+			};
+		function explicit_value() {
+			var Temp = document.getElementById("Temp").value;
+			var alpha = document.getElementById("alpha").value;
+			var I_0 = document.getElementById("I_0").value;
+			var I_lim = document.getElementById("I_lim").value;
+			var I_dens_set = document.getElementById("I_dens_set").value;
+			var voltage_explicit = BV(I_dens_set, parseFloat(Temp), 
+					parseFloat(alpha), parseFloat(I_0), 
+					parseFloat(I_lim));
+			
+			document.getElementById("Temp_value").innerHTML = Temp + " K";
+			document.getElementById("alpha_value").innerHTML = alpha + " -";
+			document.getElementById("I_0_value").innerHTML = parseFloat(I_0).toExponential(2) + " A/cm²"; //round to ten power to x
+			document.getElementById("I_lim_value").innerHTML = I_lim + " A/cm²";
+			document.getElementById("I_dens_set_value").innerHTML = I_dens_set + " A/cm²";
+			document.getElementById("voltage_explicit").innerHTML = Math.round(voltage_explicit * 100 * 1000)/100 + " mV";  //workaround to round to two digits, times 1000 due to mV
+		};
+		function update_graph() {
+			Plotly-newPlot("chartContainer", getData(), layout)
+		}
+		</script>
+	</head>
+	<body>
+		<div id="chartContainer" style="height: 70%; width: 90%;"></div>
+		<div id="inputContainer">
+			
+			<label for="Temp">Temperature</label>
+			<input type="range" id="Temp" min="273" max="372" step="5"></input>
+			<b id="Temp_value"></b><br>
+				
+			<label for="alpha">Charge Transfer Coefficient</label>
+			<input type="range" id="alpha" min="0.1" max="2" step="0.01"></input>
+			<b id="alpha_value"></b><br>
+				
+			<label for="I_0">Exchange Current Density</label>
+			<input type="range" id="I_0" min="1e-12" max="1e-3" step="any"></input>
+			<b id="I_0_value"></b><br>
+				
+			<label for="I_lim">Limiting Current Density</label>
+			<input type="range" id="I_lim" min="5" max="5.2" step="0.01"></input>
+			<b id="I_lim_value"></b><br>
+				
+			<label for="I_dens_set">Current Density</label>
+			<input type="range" id="I_dens_set" min="0.1" max="5" step="0.01"></input>
+			<b id="I_dens_set_value"></b><br>
+		</div>
+		<br>	
+			<p id="result">
+				Voltage
+				<b id="voltage_explicit"></b>
+			</p>
+		<br>
+		<script>
+			var inputs = document.getElementsByTagName("input");
+			for (let input of inputs) {
+				input.onmousemove = function() { explicit_value(), window.onload() };
+				input.onclick = function() { explicit_value(), window.onload() };
+			};
+			explicit_value();
+		</script>
+	</body>
+</html>
+	
+		
+	
+	

@@ -1,0 +1,207 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
+    <script>
+      // global variables without var keyword
+      var temperature_limit = 373; // scales the x-axis
+
+      // Functions used for reversible voltage calculation
+      function reversible_temperature(T_op) {
+          return (
+              1.5184 - 1.5421
+            * Math.pow(10, -3)
+            * T_op + 9.523
+            * Math.pow(10, -5)
+            * T_op
+            * Math.log(T_op)
+          + 9.84
+            * Math.pow(10, -8)
+            * Math.pow(T_op,2)
+          )
+      };
+
+      // Tetens equation for satuation vapor pressure
+      function tetens(T_op) {
+          return (
+              6.1078
+            * Math.pow(10, -3)
+            * Math.pow(2.71828, 17.2694 * (T_op - 273.15) / (T_op - 34.85))
+          )
+      };
+
+      // Dalton Law
+      function dalton(p_total, p_ref) {
+          return p_total - p_ref
+      };
+
+      // Nernst...
+      function reversible_pressure(T_op, act_H2, act_O2, act_H2O) {
+          return (
+              8.31446
+            * T_op
+            * Math.log(act_H2 * parseFloat(Math.pow(act_O2,0.5)) / act_H2O)
+            / 2 / 96485.3329
+          )
+      };
+
+      // correction of temperature independent to also pressure independent (leaving std conditions) reversible voltage
+      function reversible_voltage(rev_temp, rev_press) {
+          return rev_temp + rev_press
+      };
+
+
+      function getData() {
+        var p_cath  = parseFloat(document.getElementById("p_cath").value);
+        var p_anod  = parseFloat(document.getElementById("p_anod").value);
+        var y = 0;
+        var data = [];
+        var dataSeries = {
+          type: 'line'
+        };
+        var xs = [], ys = [];
+
+        // TODO: 274 as temperature start..., I do not like it, but better to include solid phase with 273
+        for (var T_op = 274; T_op < temperature_limit; T_op++) {
+          //now we apply the functions to the temperature iterator
+          var rev_temp  = parseFloat(reversible_temperature(T_op));
+          var pp_H2O    = parseFloat(tetens(T_op));
+          var pp_H2     = parseFloat(dalton(p_cath, pp_H2O));
+          var pp_O2     = parseFloat(dalton(p_anod, pp_H2O));
+		  var act_H2O = tetens(T_op);
+		  for (let w_act of document.getElementsByClassName("water_activity")) {
+			if (w_act.checked == true &&  w_act.value !== "Saturation Vapor Pressure"){
+				act_H2O = w_act.value;
+			}
+			else if (w_act.checked == true &&  w_act.value == "Saturation Vapor Pressure"){
+				//pass
+			}
+		  }
+          var rev_press = reversible_pressure(T_op, pp_H2, pp_O2, act_H2O)
+
+          y = reversible_voltage(rev_temp,rev_press); // TODO: correct it, show Schöne Plots.py for verification, makes no sense for our temperature region?! discuss!
+          xs.push(T_op);
+          ys.push(y);
+        }
+        dataSeries['x'] = xs;
+        dataSeries['y'] = ys;
+        data.push(dataSeries);
+        return data
+      }
+
+
+      // init the chart
+      window.onload = function() {
+
+        var layout = {
+          title: "Reversible Voltage",
+		  font: {size: 16},
+		  //uirevision:'true',
+          xaxis: {
+            title: "Temperature [K]"
+          },
+          yaxis: {
+            title: "Voltage [V]"
+          },
+
+        }
+
+        Plotly.newPlot(
+          'chartContainer',
+          getData(),
+          layout
+        );
+      }
+
+      function explicit_value() {
+        var p_cath = document.getElementById("p_cath").value;
+        var p_anod = document.getElementById("p_anod").value;
+        var temp_set = document.getElementById("temp_explic").value;
+        var act_H2O_set = tetens(temp_set);
+        for (let w_act of document.getElementsByClassName("water_activity")) {
+          if (w_act.checked == true && w_act.value != "Saturation Vapor Pressure") {
+            act_H2O_set = w_act.value;
+          }
+		  else if (w_act.checked == true && w_act.value == "Saturation Vapor Pressure") {
+		  //pass
+		  }
+        }
+		
+        var voltage_explicit = reversible_voltage(
+          reversible_temperature(temp_set),
+          reversible_pressure(
+            temp_set,
+            dalton(p_cath, tetens(temp_set)),
+            dalton(p_anod, tetens(temp_set)),
+            act_H2O=act_H2O_set
+          )
+        );
+
+        document.getElementById("p_cath_value").innerHTML = p_cath + " Bar";
+        document.getElementById("p_anod_value").innerHTML = p_anod + " Bar";
+        document.getElementById("temp_explic_value").innerHTML = temp_set + " K";
+        document.getElementById("w_act_value").innerHTML = parseFloat(act_H2O_set).toFixed(2);
+        document.getElementById("voltage_explicit").innerHTML = voltage_explicit.toFixed(2).toString() + " V";
+
+      };
+	  function update_graph() {
+		Plotly.newPlot('chartContainer', getData(), layout)
+	  }
+	  
+    </script>
+  </head>
+
+  <body>
+      <div id="chartContainer" style="height: 70%; width: 90%;"></div>
+
+      <div id="inputContainer">
+        <label for="p_cath">Pressure Cathode</label>
+        <input type="range" id="p_cath" min="1" max="10" step="0.1"></input>
+        <b id="p_cath_value"></b><br>
+
+        <label for="p_anod">Pressure Anode</label>
+        <input type="range" id="p_anod" min="1" max="10" step="0.1"></input>
+        <b id="p_anod_value"></b><br>
+
+        <label for="temp_explic">Temperature</label>
+        <input type="range" id="temp_explic" min="274" max="373" step="1"></input>
+        <b id="temp_explic_value"></b><br>
+
+      <fieldset style="height: 70%; width: 40%;">
+        <legend>Choose your Water Activity Model:</legend>
+        <input type="radio" name="w_act" class="water_activity" value=1 Checked>Ideal Fluid</input>
+        <input type="radio" name="w_act" class="water_activity" value="Saturation Vapor Pressure" >Saturation Vapor Pressure</input>
+
+        <div style="float:right;">
+          Value:
+          <b id="w_act_value"></b>
+        </div>
+
+      </fieldset>
+    </div><br>
+
+    <p id="result">
+      Reversible Voltage
+      <b id="voltage_explicit"></b>
+    </p><br>
+
+    <script>
+      var inputs = document.getElementsByTagName("input");
+	  /*
+      // assign listeners to redraw chart upon change
+      for (let input of inputs) {
+        input.onmousemove = function() { explicit_value(), update_graph() }; //whenever there is a mousemove -> draw_chart() and window.onload() get executed; for sliders
+		input.onclick = function() { explicit_value(), update_graph() }; //whenever there is a click -> draw_chart() and window.onload() get executed; for radiobuttons
+      }
+	  */
+	  
+	  for (let input of inputs) {
+        input.onmousemove = function() { explicit_value(), window.onload() }; //whenever there is a mousemove -> draw_chart() and window.onload() get executed; for sliders
+		input.onclick = function() { explicit_value(), window.onload() }; //whenever there is a click -> draw_chart() and window.onload() get executed; for radiobuttons
+      }
+
+      // execute once to display default values
+	  explicit_value();
+    </script>
+  </body>
+</html>
